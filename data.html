@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>ESP32 PWM Control</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; }
+    .slider { width: 300px; margin: 20px; }
+  </style>
+</head>
+<body>
+  <h1>ESP32 PWM Control</h1>
+  <p>Use the sliders to control the PWM output on three GPIO pins.</p>
+  <div>
+    <label>GPIO Pin 1: <span id="pwm1Value">0</span></label>
+    <input type="range" id="pwm1" class="slider" min="0" max="255" value="0" onchange="sendPWM('pwm1', this.value)">
+  </div>
+  <div>
+    <label>GPIO Pin 2: <span id="pwm2Value">0</span></label>
+    <input type="range" id="pwm2" class="slider" min="0" max="255" value="0" onchange="sendPWM('pwm2', this.value)">
+  </div>
+  <div>
+    <label>GPIO Pin 3: <span id="pwm3Value">0</span></label>
+    <input type="range" id="pwm3" class="slider" min="0" max="255" value="0" onchange="sendPWM('pwm3', this.value)">
+  </div>
+  <script>
+    function sendPWM(pin, value) {
+      document.getElementById(pin + "Value").innerText = value;
+      fetch(`/${pin}?value=${value}`);
+    }
+  </script>
+</body>
+</html>
