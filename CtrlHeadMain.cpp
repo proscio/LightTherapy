@@ -4,8 +4,8 @@
 #include <WebSocketsServer.h>
 #include <Preferences.h>
 
-const char* ssid = "PRi_iot_test_NC";
-const char* password = "j3328&du8AS";
+const char* ssid = "";
+const char* password = "";
 
 const int gpioPin1 = 26;
 const int gpioPin2 = 27;
