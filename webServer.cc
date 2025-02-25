@@ -150,17 +150,17 @@ void loop() {
             digitalWrite(UVB_PWM, HIGH);
             digitalWrite(LED_PWM, HIGH);
             digitalWrite(FAN_PWM, HIGH);
-            delay(900000);
+            //delay(900000);
             Serial.println("Mode: ON");
             break;
         case 2: // LED Mode
             digitalWrite(UVB_PWM, LOW);
             digitalWrite(LED_PWM, HIGH);
             digitalWrite(FAN_PWM, HIGH);
-            delay(900000);
+            //delay(900000);
             Serial.println("Mode: LED ON");
             break;
     }
 
     delay(500); // Debounce delay
-}
+}}
