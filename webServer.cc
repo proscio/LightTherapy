@@ -93,25 +93,29 @@ void loop() {
                             client.println("<h3>OFF</h3>");
                         } else if (mode == 1) {
                             client.println("<h3>ON</h3>");
+                            client.println("<p><a href=\"/mode/off\"><button class=\"button button2\">Turn UVB OFF</button></a></p>");
                         } else if (mode == 2) {
                             client.println("<h3>LED ON</h3>");
+                            client.println("<p><a href=\"/mode/uvb\"><button class=\"button\">Turn UVB ON</button></a></p>");
                         }
 
                         // Display ON/OFF buttons for UVB (D12)
+                        /*
                         client.println("<p>UVB Control (GPIO 12) - Current State: " + String((mode == 1) ? "ON" : "OFF") + "</p>");
                         if (mode == 1) {
                             client.println("<p><a href=\"/mode/off\"><button class=\"button button2\">Turn UVB OFF</button></a></p>");
                         } else {
                             client.println("<p><a href=\"/mode/uvb\"><button class=\"button\">Turn UVB ON</button></a></p>");
-                        }
+                        }*/
 
                         // Display ON/OFF buttons for LED (D14)
+                        /*
                         client.println("<p>LED Control (GPIO 14) - Current State: " + String((mode == 2) ? "ON" : "OFF") + "</p>");
                         if (mode == 2) {
-                            client.println("<p><a href=\"/mode/off\"><button class=\"button button2\">ON</button></a></p>");
+                            client.println("<p><a href=\"/mode/L\"><button class=\"button button2\">ON</button></a></p>");
                         } else {
                             client.println("<p><a href=\"/mode/led\"><button class=\"button\">Turn OFF</button></a></p>");
-                        }
+                        }*/
 
                         client.println("</body></html>");
                         
