@@ -110,7 +110,7 @@ void loop() {
                         if (mode == 2) {
                             client.println("<p><a href=\"/mode/off\"><button class=\"button button2\">Turn OFF</button></a></p>");
                         } else {
-                            client.println("<p><a href=\"/mode/led\"><button class=\"button\">Turn LED ON</button></a></p>");
+                            client.println("<p><a href=\"/mode/led\"><button class=\"button\">ON</button></a></p>");
                         }
 
                         client.println("</body></html>");
@@ -128,7 +128,7 @@ void loop() {
         }
 
         // Handle Mode Switching from Web
-        if (header.indexOf("GET /mode/uvb") >= 0) {
+        if (header.indexOf("GET /mode/on") >= 0) {
             mode = 1;
         } else if (header.indexOf("GET /mode/led") >= 0) {
             mode = 2;
@@ -149,12 +149,14 @@ void loop() {
         case 1: // BOTH ON
             digitalWrite(UVB_PWM, HIGH);
             digitalWrite(LED_PWM, HIGH);
+            digitalWrite(FAN_PWM, HIGH);
             delay(900000);
             Serial.println("Mode: ON");
             break;
         case 2: // LED Mode
             digitalWrite(UVB_PWM, LOW);
             digitalWrite(LED_PWM, HIGH);
+            digitalWrite(FAN_PWM, HIGH);
             delay(900000);
             Serial.println("Mode: LED ON");
             break;
