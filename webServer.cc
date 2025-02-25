@@ -108,9 +108,9 @@ void loop() {
                         // Display ON/OFF buttons for LED (D14)
                         client.println("<p>LED Control (GPIO 14) - Current State: " + String((mode == 2) ? "ON" : "OFF") + "</p>");
                         if (mode == 2) {
-                            client.println("<p><a href=\"/mode/off\"><button class=\"button button2\">Turn OFF</button></a></p>");
+                            client.println("<p><a href=\"/mode/off\"><button class=\"button button2\">ON</button></a></p>");
                         } else {
-                            client.println("<p><a href=\"/mode/led\"><button class=\"button\">ON</button></a></p>");
+                            client.println("<p><a href=\"/mode/led\"><button class=\"button\">Turn OFF</button></a></p>");
                         }
 
                         client.println("</body></html>");
