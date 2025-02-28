@@ -1,3 +1,9 @@
+/*********
+  Rui Santos
+  Complete project details at http://randomnerdtutorials.com  
+*********/
+
+// Load Wi-Fi library
 #include <WiFi.h>
 
 // Replace with your network credentials
@@ -10,161 +16,145 @@ WiFiServer server(80);
 // Variable to store the HTTP request
 String header;
 
-// GPIO assignments based on pinout
+// Auxiliar variables to store the current output state
+String UVB_PWMState = "off";
+String LED_PWMState = "off";
+
+// Assign output variables to GPIO pins
 const int UVB_PWM = 12;
 const int LED_PWM = 14;
-const int FAN_PWM = 27;
-const int MODE_BTN = 21;  // Mode selection button
+const int MODE_BTN = 21;
 
-// Mode tracking
-volatile int mode = 0;  // 0: Off, 1: BOTH, 2: LED
+/*
+volatile int click = 0;
 
-// Interrupt Service Routine for mode button
 void IRAM_ATTR changeMode() {
-    mode = (mode + 1) % 3; // Cycle through modes
-}
+  click = (click + 1) % 3;
+}*/
+
+// Current time
+unsigned long currentTime = millis();
+// Previous time
+unsigned long previousTime = 0; 
+// Define timeout time in milliseconds (example: 2000ms = 2s)
+const long timeoutTime = 2000;
 
 void setup() {
-    Serial.begin(115200);
-    
-    // Initialize GPIO as outputs
-    pinMode(UVB_PWM, OUTPUT);
-    pinMode(LED_PWM, OUTPUT);
-    pinMode(FAN_PWM, OUTPUT);
-    
-    // Initialize Mode button as input with internal pullup
-    pinMode(MODE_BTN, INPUT_PULLUP);
-    
-    // Attach interrupt to mode button
-    attachInterrupt(digitalPinToInterrupt(MODE_BTN), changeMode, FALLING);
-    
-    // Set outputs to LOW initially
-    digitalWrite(UVB_PWM, LOW);
-    digitalWrite(LED_PWM, LOW);
-    digitalWrite(FAN_PWM, LOW);
+  Serial.begin(115200);
+  // Initialize the output variables as outputs
+  pinMode(UVB_PWM, OUTPUT);
+  pinMode(LED_PWM, OUTPUT);
+  // Set outputs to LOW
+  digitalWrite(UVB_PWM, LOW);
+  digitalWrite(LED_PWM, LOW);
 
-    // Connect to Wi-Fi network
-    Serial.print("Connecting to ");
-    Serial.println(ssid);
-    WiFi.begin(ssid, password);
-    while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
-        Serial.print(".");
-    }
-    
-    Serial.println("\nWiFi connected.");
-    Serial.println("IP address: ");
-    Serial.println(WiFi.localIP());
-    server.begin();
+  // Connect to Wi-Fi network with SSID and password
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  // Print local IP address and start web server
+  Serial.println("");
+  Serial.println("WiFi connected.");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+  server.begin();
 }
 
-void loop() {
-    // Update the system based on mode selection
-    WiFiClient client = server.available();   // Listen for incoming clients
+void loop(){
+  WiFiClient client = server.available();   // Listen for incoming clients
 
-    if (client) {                             
-        String currentLine = "";              
-        while (client.connected()) {  
-            if (client.available()) {             
-                char c = client.read();             
-                header += c;
-                if (c == '\n') {                   
-                    if (currentLine.length() == 0) {
-                        client.println("HTTP/1.1 200 OK");
-                        client.println("Content-type:text/html");
-                        client.println("Connection: close");
-                        client.println();
-                        
-                        // Display the HTML web page
-                        client.println("<!DOCTYPE html><html>");
-                        client.println("<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
-                        client.println("<link rel=\"icon\" href=\"data:,\">");
-                        client.println("<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}");
-                        client.println(".button { background-color: #4CAF50; border: none; color: white; padding: 16px 40px;");
-                        client.println("text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer;}");
-                        client.println(".button2 {background-color: #555555;}</style></head>");
-                        
-                        // Web Page Heading
-                        client.println("<body><h1>ESP32 Web Server</h1>");
-                        
-                        // Display Current Mode
-                        client.println("<h2>Current Mode:</h2>");
-                        if (mode == 0) {
-                            client.println("<h3>OFF</h3>");
-                        } else if (mode == 1) {
-                            client.println("<h3>ON</h3>");
-                            client.println("<p><a href=\"/mode/off\"><button class=\"button button2\">Turn UVB OFF</button></a></p>");
-                        } else if (mode == 2) {
-                            client.println("<h3>LED ON</h3>");
-                            client.println("<p><a href=\"/mode/uvb\"><button class=\"button\">Turn UVB ON</button></a></p>");
-                        }
-
-                        // Display ON/OFF buttons for UVB (D12)
-                        /*
-                        client.println("<p>UVB Control (GPIO 12) - Current State: " + String((mode == 1) ? "ON" : "OFF") + "</p>");
-                        if (mode == 1) {
-                            client.println("<p><a href=\"/mode/off\"><button class=\"button button2\">Turn UVB OFF</button></a></p>");
-                        } else {
-                            client.println("<p><a href=\"/mode/uvb\"><button class=\"button\">Turn UVB ON</button></a></p>");
-                        }*/
-
-                        // Display ON/OFF buttons for LED (D14)
-                        /*
-                        client.println("<p>LED Control (GPIO 14) - Current State: " + String((mode == 2) ? "ON" : "OFF") + "</p>");
-                        if (mode == 2) {
-                            client.println("<p><a href=\"/mode/L\"><button class=\"button button2\">ON</button></a></p>");
-                        } else {
-                            client.println("<p><a href=\"/mode/led\"><button class=\"button\">Turn OFF</button></a></p>");
-                        }*/
-
-                        client.println("</body></html>");
-                        
-                        // The HTTP response ends with another blank line
-                        client.println();
-                        break;
-                    } else { 
-                        currentLine = "";
-                    }
-                } else if (c != '\r') {  
-                    currentLine += c;
-                }
+  if (client) {                             // If a new client connects,
+    currentTime = millis();
+    previousTime = currentTime;
+    //Serial.println("New Client.");          // print a message out in the serial port
+    String currentLine = "";                // make a String to hold incoming data from the client
+    while (client.connected() && currentTime - previousTime <= timeoutTime) {  // loop while the client's connected
+      currentTime = millis();
+      if (client.available()) {             // if there's bytes to read from the client,
+        char c = client.read();             // read a byte, then
+        Serial.write(c);                    // print it out the serial monitor
+        header += c;
+        if (c == '\n') {                    // if the byte is a newline character
+          // if the current line is blank, you got two newline characters in a row.
+          // that's the end of the client HTTP request, so send a response:
+          if (currentLine.length() == 0) {
+            // HTTP headers always start with a response code (e.g. HTTP/1.1 200 OK)
+            // and a content-type so the client knows what's coming, then a blank line:
+            client.println("HTTP/1.1 200 OK");
+            client.println("Content-type:text/html");
+            client.println("Connection: close");
+            client.println();
+            
+            // turns the GPIOs on and off
+            if (header.indexOf("GET /21/on") >= 0) {
+              Serial.println("LAMP ON");
+              UVB_PWMState = "on";
+              LED_PWMState = "on";
+              digitalWrite(UVB_PWM, HIGH);
+              digitalWrite(LED_PWM, HIGH);
+            } else if (header.indexOf("GET /21/led") >= 0) {
+              Serial.println("UVB OFF");
+              UVB_PWMState = "off";
+              LED_PWMState = "on";
+              digitalWrite(UVB_PWM, LOW);
+              digitalWrite(LED_PWM, HIGH);
+            } else if (header.indexOf("GET /21/off") >= 0) {
+              Serial.println("LAMP OFF");
+              UVB_PWMState = "off";
+              LED_PWMState = "off";
+              digitalWrite(UVB_PWM, LOW);
+              digitalWrite(LED_PWM, LOW);
             }
+            
+            // Display the HTML web page
+            client.println("<!DOCTYPE html><html>");
+            client.println("<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
+            client.println("<link rel=\"icon\" href=\"data:,\">");
+            // CSS to style the on/off buttons 
+            // Feel free to change the background-color and font-size attributes to fit your preferences
+            client.println("<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}");
+            client.println(".button { background-color: #4CAF50; border: none; color: white; padding: 16px 40px;");
+            client.println("text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer;}");
+            client.println(".button2 {background-color: #555555;}</style></head>");
+            
+            // Web Page Heading
+            client.println("<body><h1>ESP32 Web Server</h1>");
+            
+            // Display current state, and ON/OFF buttons for GPIO 26  
+            client.println("<p>UVB - State " + UVB_PWMState + "</p>");
+            client.println("<p>LED - State " + LED_PWMState + "</p>");
+            // If the UVB_PWMState is off, it displays the ON button       
+            if (UVB_PWMState=="off"  && LED_PWMState == "off") {
+              client.println("<p><a href=\"/21/on\"><button class=\"button\">TURN LAMP ON</button></a></p>");
+            } else if (UVB_PWMState=="on" && LED_PWMState=="on"){
+              client.println("<p><a href=\"/21/led\"><button class=\"button button2\">TURN UVB OFF</button></a></p>");
+            } else if(UVB_PWMState=="off" && LED_PWMState=="on"){
+              client.println("<p><a href=\"/21/off\"><button class=\"button button2\">TURN LAMP OFF</button></a></p>");
+            }
+               
+            client.println("</body></html>");
+            
+            // The HTTP response ends with another blank line
+            client.println();
+            // Break out of the while loop
+            break;
+          } else { // if you got a newline, then clear currentLine
+            currentLine = "";
+          }
+        } else if (c != '\r') {  // if you got anything else but a carriage return character,
+          currentLine += c;      // add it to the end of the currentLine
         }
-
-        // Handle Mode Switching from Web
-        if (header.indexOf("GET /mode/on") >= 0) {
-            mode = 1;
-        } else if (header.indexOf("GET /mode/led") >= 0) {
-            mode = 2;
-        } else if (header.indexOf("GET /mode/off") >= 0) {
-            mode = 0;
-        }
-
-        // Clear the header variable
-        header = "";
-
-    switch (mode) {
-        case 0: // Off
-            digitalWrite(UVB_PWM, LOW);
-            digitalWrite(LED_PWM, LOW);
-            digitalWrite(FAN_PWM, LOW);
-            Serial.println("Mode: OFF");
-            break;
-        case 1: // BOTH ON
-            digitalWrite(UVB_PWM, HIGH);
-            digitalWrite(LED_PWM, HIGH);
-            digitalWrite(FAN_PWM, HIGH);
-            //delay(900000);
-            Serial.println("Mode: ON");
-            break;
-        case 2: // LED Mode
-            digitalWrite(UVB_PWM, LOW);
-            digitalWrite(LED_PWM, HIGH);
-            digitalWrite(FAN_PWM, HIGH);
-            //delay(900000);
-            Serial.println("Mode: LED ON");
-            break;
+      }
     }
-
-    delay(500); // Debounce delay
-}}
+    // Clear the header variable
+    header = "";
+    // Close the connection
+    client.stop();
+    //Serial.println("Client disconnected.");
+    Serial.println("");
+  }
+}
