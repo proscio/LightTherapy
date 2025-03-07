@@ -1,0 +1,98 @@
+#include <WiFi.h>
+#include <Arduino.h>
+#include "driver/ledc.h"
+
+const int WHITE_LED_PIN = 15;
+const int UVB_ARRAY_PIN = 16;
+const int FAN_PIN = 17; // Fan control pin
+const int BUTTON_MODE_PIN = 4;
+const int BUTTON_LUX_PIN = 5;
+
+const int PWM_CHANNEL_LED = 0;
+const int PWM_CHANNEL_UVB = 1;
+const int PWM_FREQ = 500;
+const int PWM_RESOLUTION = 8;
+const int MAX_DUTY_CYCLE = (int)(pow(2, PWM_RESOLUTION) - 1);
+
+const int LUX_LEVELS[] = {5000, 2500, 1000};
+const int LED_DURATIONS[] = {10 * 60 * 1000, 20 * 60 * 1000, 30 * 60 * 1000};
+const int UVB_DURATIONS[] = {15 * 60 * 1000, 30 * 60 * 1000, 60 * 60 * 1000};
+
+int modeState = 0;
+int luxState = 0;
+bool lightLocked = false;
+unsigned long lastLuxPressTime = 0;
+
+void setup() {
+    Serial.begin(115200);
+    pinMode(BUTTON_MODE_PIN, INPUT_PULLUP);
+    pinMode(BUTTON_LUX_PIN, INPUT_PULLUP);
+    pinMode(FAN_PIN, OUTPUT);
+
+    ledcSetup(PWM_CHANNEL_LED, PWM_FREQ, PWM_RESOLUTION);
+    ledcSetup(PWM_CHANNEL_UVB, PWM_FREQ, PWM_RESOLUTION);
+    ledcAttachPin(WHITE_LED_PIN, PWM_CHANNEL_LED);
+    ledcAttachPin(UVB_ARRAY_PIN, PWM_CHANNEL_UVB);
+    
+    digitalWrite(FAN_PIN, LOW);
+    Serial.println("Light Therapy Box Initialized");
+}
+
+void loop() {
+    if (digitalRead(BUTTON_MODE_PIN) == LOW) {
+        modeState = (modeState + 1) % 3;
+        Serial.print("Mode changed to: ");
+        Serial.println(modeState);
+        activateMode(modeState);
+        delay(300);
+    }
+    
+    if (digitalRead(BUTTON_LUX_PIN) == LOW && !lightLocked) {
+        luxState = (luxState + 1) % 3;
+        Serial.print("LED Lux mode changed to: ");
+        Serial.println(LUX_LEVELS[luxState]);
+        lastLuxPressTime = millis();
+        delay(300);
+    }
+    
+    if (!lightLocked && (millis() - lastLuxPressTime >= 15000) && luxState != 0) {
+        lightLocked = true;
+        Serial.println("LED mode locked");
+    }
+}
+
+void activateMode(int mode) {
+    Serial.print("Activating Mode ");
+    Serial.println(mode);
+    
+    int ledLux = LUX_LEVELS[luxState];
+    int ledTime = LED_DURATIONS[luxState];
+    int uvbTime = (mode == 0) ? UVB_DURATIONS[luxState] : 0;
+    
+    int ledDutyCycle = map(ledLux, 1000, 5000, 64, MAX_DUTY_CYCLE);
+    ledcWrite(PWM_CHANNEL_LED, ledDutyCycle);
+    Serial.print("White LED set to ");
+    Serial.print(ledLux);
+    Serial.println(" lux");
+    
+    if (mode == 0) {
+        ledcWrite(PWM_CHANNEL_UVB, MAX_DUTY_CYCLE / 2);
+        digitalWrite(FAN_PIN, HIGH);
+        Serial.println("UVB array set to 500 lux, Fan ON");
+    } else {
+        ledcWrite(PWM_CHANNEL_UVB, 0);
+        digitalWrite(FAN_PIN, LOW);
+        Serial.println("UVB array off, Fan OFF");
+    }
+    
+    delay(ledTime);
+    turnOffLights();
+}
+
+void turnOffLights() {
+    ledcWrite(PWM_CHANNEL_LED, 0);
+    ledcWrite(PWM_CHANNEL_UVB, 0);
+    digitalWrite(FAN_PIN, LOW);
+    lightLocked = false;
+    Serial.println("Lights off, Fan OFF");
+}
