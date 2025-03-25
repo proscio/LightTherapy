@@ -2,11 +2,11 @@
 #include <Arduino.h>
 #include "driver/ledc.h"
 
-const int WHITE_LED_PIN = 15;
+const int WHITE_LED_PIN = 27;
 const int UVB_ARRAY_PIN = 16;
-const int FAN_PIN = 17; // Fan control pin
-const int BUTTON_MODE_PIN = 4;
-const int BUTTON_LUX_PIN = 5;
+const int FAN_PIN = 26; // Fan control pin
+const int BUTTON_MODE_PIN = 12;
+const int BUTTON_LUX_PIN = 14;
 
 const int PWM_CHANNEL_LED = 0;
 const int PWM_CHANNEL_UVB = 1;
@@ -24,6 +24,7 @@ bool lightLocked = false;
 unsigned long lastLuxPressTime = 0;
 
 void setup() {
+
     Serial.begin(115200);
     pinMode(BUTTON_MODE_PIN, INPUT_PULLUP);
     pinMode(BUTTON_LUX_PIN, INPUT_PULLUP);
