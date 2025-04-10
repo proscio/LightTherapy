@@ -1,0 +1,103 @@
+#include <Arduino.h>
+#include <esp32-hal-ledc.h>
+
+const int PWM_CHANNEL_WHITE = 0;
+const int PWM_CHANNEL_UVB = 1;
+const int PWM_FREQ = 34;  // Updated to 34 Hz
+const int PWM_RESOLUTION = 8;
+const int MAX_DUTY_CYCLE = (int)(pow(2, PWM_RESOLUTION) - 1);  // 255 for 8-bit
+
+const int WHITE_LED_PIN = 27;
+const int UVB_ARRAY_PIN = 18;
+const int BUTTON_TOGGLE = 12;
+const int BUTTON_LUX = 14;
+
+// New desired duty cycle range (as percent)
+const int MIN_DUTY_PERCENT = 30;
+const int MAX_DUTY_PERCENT = 80;
+
+int lampState = 0;
+int luxLevels[] = {100, 500, 700}; // Lux values
+int luxDurations[] = {15, 10, 5};  // Seconds
+int currentLuxIndex = 0;
+unsigned long lastLuxPressTime = 0;
+bool luxLocked = false;
+
+void setup() {
+    Serial.begin(115200);
+
+    // Set up PWM for white LED and UVB array
+    ledcSetup(PWM_CHANNEL_WHITE, PWM_FREQ, PWM_RESOLUTION);
+    ledcAttachPin(WHITE_LED_PIN, PWM_CHANNEL_WHITE);
+    ledcSetup(PWM_CHANNEL_UVB, PWM_FREQ, PWM_RESOLUTION);
+    ledcAttachPin(UVB_ARRAY_PIN, PWM_CHANNEL_UVB);
+
+    pinMode(BUTTON_TOGGLE, INPUT_PULLUP);
+    pinMode(BUTTON_LUX, INPUT_PULLUP);
+
+    Serial.println("Light Therapy Lamp Initialized.");
+}
+
+void loop() {
+    static bool lastButtonToggleState = HIGH;
+    static bool lastButtonLuxState = HIGH;
+
+    bool buttonToggleState = digitalRead(BUTTON_TOGGLE);
+    bool buttonLuxState = digitalRead(BUTTON_LUX);
+
+    if (buttonToggleState == LOW && lastButtonToggleState == HIGH) {
+        lampState = (lampState + 1) % 3;
+
+        if (lampState == 0) { // All Off
+            ledcWrite(PWM_CHANNEL_WHITE, 0);
+            ledcWrite(PWM_CHANNEL_UVB, 0);
+            Serial.println("Mode: All Off");
+        } else if (lampState == 1) { // White LED Only
+            int duty = map(luxLevels[currentLuxIndex], 0, 700, 
+                           MAX_DUTY_CYCLE * MIN_DUTY_PERCENT / 100, 
+                           MAX_DUTY_CYCLE * MAX_DUTY_PERCENT / 100);
+            ledcWrite(PWM_CHANNEL_WHITE, duty);
+            ledcWrite(PWM_CHANNEL_UVB, 0);
+            Serial.println("Mode: White LED On, UVB Off");
+        } else if (lampState == 2) { // All On
+            int duty = map(luxLevels[currentLuxIndex], 0, 700, 
+                           MAX_DUTY_CYCLE * MIN_DUTY_PERCENT / 100, 
+                           MAX_DUTY_CYCLE * MAX_DUTY_PERCENT / 100);
+            ledcWrite(PWM_CHANNEL_WHITE, duty);
+            ledcWrite(PWM_CHANNEL_UVB, MAX_DUTY_CYCLE * MAX_DUTY_PERCENT / 100);
+            Serial.println("Mode: All On (White LED and UVB)");
+        }
+        delay(200);
+    }
+
+    if (buttonLuxState == LOW && lastButtonLuxState == HIGH) {
+        if (!luxLocked) {
+            currentLuxIndex = (currentLuxIndex + 1) % 3;
+            int duty = map(luxLevels[currentLuxIndex], 0, 700, 
+                           MAX_DUTY_CYCLE * MIN_DUTY_PERCENT / 100, 
+                           MAX_DUTY_CYCLE * MAX_DUTY_PERCENT / 100);
+            ledcWrite(PWM_CHANNEL_WHITE, duty);
+            lastLuxPressTime = millis();
+            Serial.print("Lux Level Changed: ");
+            Serial.print(luxLevels[currentLuxIndex]);
+            Serial.println(" lux");
+        }
+        delay(200);
+    }
+
+    if (!luxLocked && millis() - lastLuxPressTime >= 15000 && lastLuxPressTime > 0) {
+        luxLocked = true;
+        Serial.print("Lux Level Locked at: ");
+        Serial.print(luxLevels[currentLuxIndex]);
+        Serial.print(" lux for ");
+        Serial.print(luxDurations[currentLuxIndex]);
+        Serial.println(" seconds.");
+
+        delay(luxDurations[currentLuxIndex] * 1000);
+        luxLocked = false;
+        Serial.println("Lux Lock Released. You can now change levels.");
+    }
+
+    lastButtonToggleState = buttonToggleState;
+    lastButtonLuxState = buttonLuxState;
+}
