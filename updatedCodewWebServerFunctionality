@@ -1,0 +1,219 @@
+//#ifdef ESP32
+#include <WiFi.h>
+#include "driver/ledc.h"
+#include <AsyncTCP.h>
+//#else
+//  #include <ESP8266WiFi.h>
+//  #include <ESPAsyncTCP.h>
+//#endif
+#include <Arduino.h>
+#include <ESPAsyncWebServer.h>
+
+const char* ssid = "Jeffersonscoffee";
+const char* password = "Wethepeople12";
+
+const char* PARAM_INPUT_1 = "state";
+
+// Pin Definitions
+
+const int WHITE_LED_PIN = 27;
+const int UVB_LED_PIN = 14;
+const int MODE_BUTTON_PIN = 18;
+const int LUX_BUTTON_PIN = 19;
+
+// PWM Config
+const int PWM_FREQ = 34000;
+const int PWM_RESOLUTION = 8;
+const int MAX_DUTY = (1 << PWM_RESOLUTION) - 1;
+const int PWM_CHANNEL_WHITE = 0;
+const int PWM_CHANNEL_UVB = 1;
+
+// Modes: 0 = Off, 1 = White, 2 = White + UVB
+int mode = 0;
+
+// Lux levels: 0 = 30%, 1 = 65%, 2 = 80%
+int luxLevel = 0;
+const int luxDutyCycle[] = {
+  int(0.3 * MAX_DUTY),
+  int(0.65 * MAX_DUTY),
+  int(0.8 * MAX_DUTY)
+};
+
+// Debounce
+unsigned long lastModePressTime = 0;
+unsigned long lastLuxPressTime = 0;
+const unsigned long debounceDelay = 2000;  // ms
+unsigned long currentTime = millis();
+
+bool lastModeButtonState = 0;
+bool lastLuxButtonState = 0;
+
+AsyncWebServer server(80);
+
+const char index_html[] PROGMEM = R"rawliteral(
+<!DOCTYPE HTML><html>
+<head>
+  <title>ESP Web Server</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    html {font-family: Arial; display: inline-block; text-align: center;}
+    h2 {font-size: 3.0rem;}
+    p {font-size: 3.0rem;}
+    body {max-width: 600px; margin:0px auto; padding-bottom: 25px;}
+    .switch {position: relative; display: inline-block; width: 120px; height: 68px} 
+    .switch input {display: none}
+    .slider {position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; border-radius: 34px}
+    .slider:before {position: absolute; content: ""; height: 52px; width: 52px; left: 8px; bottom: 8px; background-color: #fff; -webkit-transition: .4s; transition: .4s; border-radius: 68px}
+    input:checked+.slider {background-color: #2196F3}
+    input:checked+.slider:before {-webkit-transform: translateX(52px); -ms-transform: translateX(52px); transform: translateX(52px)}
+  </style>
+</head>
+<body>
+  <h2>ESP Web Server</h2>
+  %BUTTONPLACEHOLDER%
+  %BUTTONPLACEHOLDER%
+<script>function toggleCheckbox(element) {
+  var xhr = new XMLHttpRequest();
+  if(element.checked){ xhr.open("GET", "/update?state=1", true); }
+  else { xhr.open("GET", "/update?state=0", true); }
+  xhr.send();
+}
+
+setInterval(function ( ) {
+  var xhttp = new XMLHttpRequest();
+  xhttp.onreadystatechange = function() {
+    if (this.readyState == 4 && this.status == 200) {
+      var inputChecked;
+      var outputStateM;
+      if( this.responseText == 1){ 
+        inputChecked = true;
+        outputStateM = "On";
+      }
+      else { 
+        inputChecked = false;
+        outputStateM = "Off";
+      }
+      document.getElementById("output").checked = inputChecked;
+      document.getElementById("outputState").innerHTML = outputStateM;
+    }
+  };
+  xhttp.open("GET", "/state", true);
+  xhttp.send();
+}, 1000 ) ;
+</script>
+</body>
+</html>
+)rawliteral";
+
+// Replaces placeholder with button section in your web page
+String processor(const String& var){
+  //Serial.println(var);
+  if(var == "BUTTONPLACEHOLDER"){
+    String buttons ="";
+    String outputStateValue = outputState();
+    buttons+= "<h4>Output - GPIO 2 - State <span id=\"outputState\"></span></h4><label class=\"switch\"><input type=\"checkbox\" onchange=\"toggleCheckbox(this)\" id=\"output\" " + outputStateValue + "><span class=\"slider\"></span></label>";
+    return buttons;
+  }
+  return String();
+}
+
+String outputState(){
+  if(digitalRead(MODE_BUTTON_PIN)){
+    return "checked";
+  }
+  else {
+    return "";
+  }
+  return "";
+
+  if(digitalRead(LUX_BUTTON_PIN)){
+    return "checked";
+  }
+  else {
+    return "";
+  }
+  return "";
+}
+
+void setupPWM() {
+  ledcSetup(PWM_CHANNEL_WHITE, PWM_FREQ, PWM_RESOLUTION);
+  ledcAttachPin(WHITE_LED_PIN, PWM_CHANNEL_WHITE);
+
+  ledcSetup(PWM_CHANNEL_UVB, PWM_FREQ, PWM_RESOLUTION);
+  ledcAttachPin(UVB_LED_PIN, PWM_CHANNEL_UVB);
+}
+
+void updateLEDs() {
+  int duty = luxDutyCycle[luxLevel];
+
+  switch (mode) {
+    case 0: // Off
+      ledcWrite(PWM_CHANNEL_WHITE, 0);
+      ledcWrite(PWM_CHANNEL_UVB, 0);
+      break;
+    case 1: // White only
+      ledcWrite(PWM_CHANNEL_WHITE, duty);
+      ledcWrite(PWM_CHANNEL_UVB, 0);
+      break;
+    case 2: // White + UVB
+      ledcWrite(PWM_CHANNEL_WHITE, duty);
+      ledcWrite(PWM_CHANNEL_UVB, duty);
+      break;
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(MODE_BUTTON_PIN, INPUT);
+  pinMode(LUX_BUTTON_PIN, INPUT);
+
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println("Connecting to WiFi..");
+  }
+
+  // Print ESP Local IP Address
+  Serial.println(WiFi.localIP());
+
+  setupPWM();
+  updateLEDs();
+
+  Serial.println("Light Therapy Lamp Initialized.");
+}
+
+void loop() {
+
+  // ---- MODE BUTTON ----
+  bool currentModeButton = digitalRead(MODE_BUTTON_PIN);
+  if (currentModeButton && lastModeButtonState && //currentModeButton and !lastModeButtonState
+      (currentTime - lastModePressTime > debounceDelay)) {
+    server.on("/changeMode", HTTP_GET, [](AsyncWebServerRequest *request){
+      mode = (mode + 1) % 3;
+      updateLEDs();
+      request->send(200, "text/plain", "Mode changed");
+      Serial.print("Mode changed to: ");
+      Serial.println(mode);
+      lastModePressTime = currentTime;
+    });
+  }
+  lastModeButtonState = currentModeButton;
+
+  // ---- LUX BUTTON ----
+  bool currentLuxButton = digitalRead(LUX_BUTTON_PIN);
+  if (currentLuxButton && lastLuxButtonState && //currentLuxButton and !lastLuxButtonState
+      (currentTime - lastLuxPressTime > debounceDelay)) {
+    server.on("/adjustLux", HTTP_GET, [](AsyncWebServerRequest *request){
+      luxLevel = (luxLevel + 1) % 3;
+      updateLEDs();
+      request->send(200, "text/plain", "Lux level adjusted");
+      Serial.print("Lux level changed to: ");
+      Serial.println(luxLevel);
+      lastLuxPressTime = currentTime;
+    });
+  }
+  lastLuxButtonState = currentLuxButton;
+
+  delay(10); // Optional small delay to reduce loop noise
+} 
