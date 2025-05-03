@@ -1,0 +1,96 @@
+#include <WiFi.h>
+#include <Arduino.h>
+
+// Pin Definitions
+const int WHITE_LED_PIN = 27;
+const int UVB_LED_PIN = 14;
+const int MODE_BUTTON_PIN = 18;
+const int LUX_BUTTON_PIN = 19;
+
+// PWM Config
+const int PWM_FREQ = 34000;
+const int PWM_RESOLUTION = 8;
+const int MAX_DUTY = (1 << PWM_RESOLUTION) - 1;
+
+// Modes: 0 = Off, 1 = White, 2 = White + UVB
+int mode = 0;
+
+// Lux levels: 0 = 30%, 1 = 65%, 2 = 80%
+int luxLevel = 0;
+const int luxDutyCycle[] = {
+  int(0.3 * MAX_DUTY),
+  int(0.65 * MAX_DUTY),
+  int(0.8 * MAX_DUTY)
+};
+
+// Debounce
+unsigned long lastModePressTime = 0;
+unsigned long lastLuxPressTime = 0;
+const unsigned long debounceDelay = 2000;  // ms
+
+bool lastModeButtonState = 0;
+bool lastLuxButtonState = 0;
+
+void setupPWM() {
+  // Automatically assigns a PWM channel per pin
+  ledcAttach(WHITE_LED_PIN, PWM_FREQ, PWM_RESOLUTION);
+  ledcAttach(UVB_LED_PIN, PWM_FREQ, PWM_RESOLUTION);
+}
+
+void updateLEDs() {
+  int duty = luxDutyCycle[luxLevel];
+
+  switch (mode) {
+    case 0: // Off
+      ledcWrite(WHITE_LED_PIN, 0);
+      ledcWrite(UVB_LED_PIN, 0);
+      break;
+    case 1: // White only
+      ledcWrite(WHITE_LED_PIN, duty);
+      ledcWrite(UVB_LED_PIN, 0);
+      break;
+    case 2: // White + UVB
+      ledcWrite(WHITE_LED_PIN, duty);
+      ledcWrite(UVB_LED_PIN, duty);
+      break;
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(MODE_BUTTON_PIN, INPUT);
+  pinMode(LUX_BUTTON_PIN, INPUT);
+  setupPWM();
+  updateLEDs();
+  Serial.println("Light Therapy Lamp Initialized.");
+}
+
+void loop() {
+  unsigned long currentTime = millis();
+
+  // ---- MODE BUTTON ----
+  bool currentModeButton = digitalRead(MODE_BUTTON_PIN);
+  if (currentModeButton && !lastModeButtonState &&
+      (currentTime - lastModePressTime > debounceDelay)) {
+    mode = (mode + 1) % 3;
+    updateLEDs();
+    Serial.print("Mode changed to: ");
+    Serial.println(mode);
+    lastModePressTime = currentTime;
+  }
+  lastModeButtonState = currentModeButton;
+
+  // ---- LUX BUTTON ----
+  bool currentLuxButton = digitalRead(LUX_BUTTON_PIN);
+  if (currentLuxButton && !lastLuxButtonState &&
+      (currentTime - lastLuxPressTime > debounceDelay)) {
+    luxLevel = (luxLevel + 1) % 3;
+    updateLEDs();
+    Serial.print("Lux level changed to: ");
+    Serial.println(luxLevel);
+    lastLuxPressTime = currentTime;
+  }
+  lastLuxButtonState = currentLuxButton;
+
+  delay(10); // Optional small delay to reduce loop noise
+}
