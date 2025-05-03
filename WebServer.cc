@@ -9,24 +9,39 @@
 #include <ESPAsyncWebServer.h>
 
 // Replace with your network credentials
-const char* ssid = "SMTH_SINISTER_AFOOT";
-const char* password = "peniscolada69420";
+const char* ssid = "SSID";
+const char* password = "password";
 
 const char* PARAM_INPUT_1 = "state";
 
-const int output1 = 27;
-const int output2 = 14;
-const int buttonPin = 18;
+const int WHITE_LED_PIN = 27;
+const int UVB_LED_PIN = 14;
+const int MODE_BUTTON_PIN = 18;
+const int LUX_BUTTON_PIN = 18;
+
+// PWM Config
+//const int PWM_FREQ = 34000;
+const int PWM_RESOLUTION = 8;
+const int MAX_DUTY = (1 << PWM_RESOLUTION) - 1;
+// const int PWM_CHANNEL_WHITE = 0;
+// const int PWM_CHANNEL_UVB = 1;
 
 // Variables will change:
-int mode = 0;          // the current state of the output1 pin
+int mode = 0;          // the current state of the WHITE_LED_PIN pin
 int buttonMode;             // the current reading from the input pin
 int lastButtonMode = LOW;   // the previous reading from the input pin
 
+int luxLevel = 0;
+const int luxDutyCycle[] = {
+  int(0.3 * MAX_DUTY),
+  int(0.65 * MAX_DUTY),
+  int(0.8 * MAX_DUTY)
+};
+
 // the following variables are unsigned longs because the time, measured in
 // milliseconds, will quickly become a bigger number than can be stored in an int.
-unsigned long lastDebounceTime = 0;  // the last time the output1 pin was toggled
-unsigned long debounceDelay = 50;    // the debounce time; increase if the output1 flickers
+unsigned long lastDebounceTime = 0;  // the last time the WHITE_LED_PIN pin was toggled
+unsigned long debounceDelay = 50;    // the debounce time; increase if the WHITE_LED_PIN flickers
 
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
@@ -64,6 +79,12 @@ const char index_html[] PROGMEM = R"rawliteral(
     xhr.send();
   }
 
+  function cycleluxLevel() {
+    var xhr = new XMLHttpRequest();
+    xhr.open("GET", "/updateluxLevel", true);
+    xhr.send();
+  }
+
   setInterval(function () {
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
@@ -85,6 +106,7 @@ String processor(const String& var){
   if (var == "BUTTONPLACEHOLDER") {
     String buttons = "";
     buttons += "<p><button onclick=\"cycleMode()\" class=\"button\">Change Mode</button></p>";
+    buttons += "<p><button onclick=\"cycleluxLevel()\" class=\"button\">Change Lux Level</button></p>";
     buttons += "<p>Current Mode: <span id=\"outputState\">Loading...</span></p>";
     return buttons;
   }
@@ -93,27 +115,35 @@ String processor(const String& var){
 
 
 String outputState() {
+  String state = "";
   switch (mode) {
-    case 0: return "OFF";
-    case 1: return "LED ON";
-    case 2: return "LED + UVB ON";
-    default: return "UNKNOWN";
+    case 0: state += "Off"; break;
+    case 1: state += "LED On"; break;
+    case 2: state += "LED + UVB On"; break;
   }
+  state += " | Lux Level: ";
+  switch (luxLevel) {
+    case 0: state += "Low"; break;
+    case 1: state += "Medium"; break;
+    case 2: state += "High"; break;
+  }
+  return state;
 }
+
 
 void updateOutputs() {
   switch (mode) {
     case 0: // OFF
-      digitalWrite(output1, LOW);
-      digitalWrite(output2, LOW);
+      digitalWrite(WHITE_LED_PIN, LOW);
+      digitalWrite(UVB_LED_PIN, LOW);
       break;
     case 1: // LED ON
-      digitalWrite(output1, HIGH);
-      digitalWrite(output2, LOW);
+      digitalWrite(WHITE_LED_PIN, HIGH);
+      digitalWrite(UVB_LED_PIN, LOW);
       break;
     case 2: // LED + UVB ON
-      digitalWrite(output1, HIGH);
-      digitalWrite(output2, HIGH);
+      digitalWrite(WHITE_LED_PIN, HIGH);
+      digitalWrite(UVB_LED_PIN, HIGH);
       break;
   }
 }
@@ -123,9 +153,9 @@ void setup(){
   // Serial port for debugging purposes
   Serial.begin(115200);
 
-  pinMode(output1, OUTPUT);
-  digitalWrite(output1, LOW);
-  pinMode(buttonPin, INPUT);
+  pinMode(WHITE_LED_PIN, OUTPUT);
+  digitalWrite(WHITE_LED_PIN, LOW);
+  pinMode(MODE_BUTTON_PIN, INPUT);
   
   // Connect to Wi-Fi
   WiFi.begin(ssid, password);
@@ -151,6 +181,18 @@ void setup(){
     request->send(200, "text/plain", "OK");
   });
 
+  server.on("/updateluxLevel", HTTP_GET, [](AsyncWebServerRequest* request) {
+  luxLevel = (luxLevel + 1) % 3;
+  Serial.print("Lux Level changed to: ");
+  Serial.println(luxLevel);
+
+  // Apply duty cycle if using PWM
+  // ledcWrite(channel, dutyCycle[luxLevel]);
+
+  request->send(200, "text/plain", "OK");
+});
+
+
 
   // Send a GET request to <ESP_IP>/state
   server.on("/state", HTTP_GET, [](AsyncWebServerRequest* request) {
@@ -163,7 +205,7 @@ void setup(){
   
 void loop() {
   // read the state of the switch into a local variable:
-  int reading = digitalRead(buttonPin);
+  int reading = digitalRead(MODE_BUTTON_PIN);
   if (reading != lastButtonMode) {
     lastDebounceTime = millis();
   }
