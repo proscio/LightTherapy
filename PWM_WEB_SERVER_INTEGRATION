@@ -9,8 +9,8 @@
 #include <Arduino.h>
 
 // Replace with your network credentials
-const char* ssid = "SSID";
-const char* password = "password";
+const char* ssid = "";
+const char* password = "";
 
 const char* PARAM_INPUT_1 = "state";
 
@@ -51,58 +51,149 @@ bool lastLuxButtonState = 0;
 AsyncWebServer server(80);
 
 const char index_html[] PROGMEM = R"rawliteral(
-<!DOCTYPE HTML><html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <title>ESP Web Server</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="UTF-8">
+  <title>ESP32 Lamp Control</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    html {font-family: Arial; display: inline-block; text-align: center;}
-    h2 {font-size: 3.0rem;}
-    p {font-size: 2.0rem;}
-    body {max-width: 600px; margin:0px auto; padding-bottom: 25px;}
-    .button {
-      background-color: #4CAF50;
-      border: none;
-      color: white;
-      padding: 16px 40px;
-      text-decoration: none;
-      font-size: 20px;
-      margin: 2px;
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      background: #f4f4f4;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .wave {
+      width: 100%;
+      height: 200px;
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: -1;
+    }
+
+    .container {
+      margin-top: 200px;
+      padding: 20px;
+      text-align: center;
+      max-width: 600px;
+    }
+
+    h2 {
+      font-size: 3rem;
+      font-weight: bold;
+      color: #222;
+      margin-bottom: 10px;
+      border-bottom: 3px solid #ddd;
+      display: inline-block;
+      padding-bottom: 5px;
+    }
+
+    p {
+      font-size: 1rem;
+      color: #444;
+      margin: 20px 0;
+      line-height: 1.6;
+    }
+
+    .buttons {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      margin-top: 20px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 12px 28px;
+      font-size: 1rem;
+      border-radius: 999px;
+      border: 2px solid #4f46e5;
       cursor: pointer;
-      border-radius: 8px;
+      transition: all 0.3s ease;
+      font-weight: 600;
+    }
+
+    .btn-primary {
+      background: #4f46e5;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #4338ca;
+    }
+
+    .btn-outline {
+      background: transparent;
+      color: #4f46e5;
+    }
+
+    .btn-outline:hover {
+      background: #eef2ff;
+    }
+
+    .status {
+      margin-top: 30px;
+      font-size: 1.1rem;
+      color: #111827;
     }
   </style>
 </head>
 <body>
-  <h2>ESP Web Server</h2>
-  %BUTTONPLACEHOLDER%
-<script>
-  function cycleMode() {
-    var xhr = new XMLHttpRequest();
-    xhr.open("GET", "/update", true);
-    xhr.send();
-  }
+  <svg class="wave" viewBox="0 0 1440 320">
+    <path fill="#e5e7eb" fill-opacity="1"
+      d="M0,192L80,165.3C160,139,320,85,480,80C640,75,800,117,960,144C1120,171,1280,181,1360,186.7L1440,192L1440,0L1360,0C1280,0,1120,0,960,0C800,0,640,0,480,0C320,0,160,0,80,0L0,0Z">
+    </path>
+  </svg>
 
-  function cycleluxLevel() {
-    var xhr = new XMLHttpRequest();
-    xhr.open("GET", "/updateluxLevel", true);
-    xhr.send();
-  }
+  <div class="container">
+    <h2>ESP32 Lamp Control</h2>
+    <p>Use the buttons below to toggle light modes or adjust brightness. Your device is connected and listening for commands.</p>
+    
+    <div class="buttons">
+      <button class="btn btn-outline" onclick="cycleMode()">Toggle Mode</button>
+      <button class="btn btn-primary" onclick="cycleLuxLevel()">Adjust Lux</button>
+    </div>
 
-  setInterval(function () {
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-      if (this.readyState == 4 && this.status == 200) {
-        document.getElementById("outputState").innerHTML = this.responseText;
-      }
-    };
-    xhttp.open("GET", "/state", true);
-    xhttp.send();
-  }, 1000);
-</script>
+    <div class="status">
+      <p>Status: <span id="outputState">Loading...</span></p>
+    </div>
+  </div>
+
+  <script>
+    function cycleMode() {
+      fetch('/update');
+    }
+
+    function cycleLuxLevel() {
+      fetch('/updateluxLevel');
+    }
+
+    setInterval(() => {
+      fetch('/state')
+        .then(res => res.text())
+        .then(data => {
+          document.getElementById("outputState").textContent = data;
+        });
+    }, 1000);
+  </script>
 </body>
 </html>
 )rawliteral";
+
+
 
 void setupPWM() {
   // Automatically assigns a PWM channel per pin
